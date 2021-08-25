@@ -279,10 +279,7 @@ def get_t_start_stop(start, end):
     if start in dates and end not in dates:
         return jsonify({"error": f"Not a valid {end} End Date. Date Range is {first_date} to {last_date}"}), 404
     
-    
-
-    
-######################################################################################################################################    
+    ######################################################################################################################################    
     
 if __name__ == "__main__":
     app.run(debug=True)

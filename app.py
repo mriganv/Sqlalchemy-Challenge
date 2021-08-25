@@ -1,6 +1,7 @@
 import numpy as np
 import sqlalchemy
 import datetime as dt
+import datetime
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session, session
 from sqlalchemy import create_engine, func
@@ -174,7 +175,10 @@ def tobs():
 def agg_returns(start):
     
     session = Session(engine)
-    
+    first_date = session.query(Measurement.date).order_by(
+        Measurement.date.asc()).first()[0]
+    last_date = session.query(Measurement.date).order_by(
+        Measurement.date.desc()).first()[0]
     # Query for the date, min, max and average temperature
     sel = [Measurement.date, func.min(Measurement.tobs), func.avg(
             Measurement.tobs), func.max(Measurement.tobs)]
@@ -185,12 +189,21 @@ def agg_returns(start):
 
     # --- close the session ---
     session.close()
+    a = datetime.datetime.strptime(first_date, "%Y-%m-%d")
+    b = datetime.datetime.strptime(last_date, "%Y-%m-%d")
+    b = b + datetime.timedelta(days=1)
+    date_array = \
+        (a + datetime.timedelta(days=x) for x in range(0, (b-a).days))
+    dates = []
+    for date_object in date_array:
+        dates.append(date_object.strftime("%Y-%m-%d"))
 
-    # Create a dictionary from the row data and append to a list of Temperatures
-    Temperatures =[] 
-    for temp_date, tmin, tavg, tmax in results:
+    if start in dates:
+        Temperatures = []
 
-            # --- create an empty dictionary and store results for each row ---
+        for temp_date, tmin, tavg, tmax in results:
+
+            #   Create a dictionary from the row data and append to a list of temps_dict
             temps_dict = {}
             temps_dict["Date"] = temp_date
             temps_dict["T-Min"] = tmin
@@ -199,9 +212,12 @@ def agg_returns(start):
 
             # --- append each result's dictionary to the Temperatures list ---
             Temperatures.append(temps_dict)
+        return jsonify(Temperatures)
 
-    # --- return the JSON list of normals ---
-    return jsonify(Temperatures)
+    if start not in dates:
+        return jsonify({"error": f"Not a valid {start} Start Date. Date Range is {first_date} to {last_date}"}), 404
+
+    
     
 ####################################################################################################################################
 
@@ -214,34 +230,58 @@ def agg_returns(start):
 @app.route('/api/v1.0/<start>/<end>')
 def get_t_start_stop(start, end):
     session = Session(engine)
+    last_date = session.query(Measurement.date).order_by(
+        Measurement.date.desc()).first()[0]
+    first_date = session.query(Measurement.date).order_by(
+    Measurement.date.asc()).first()[0]
+    session = Session(engine)
     sel = [Measurement.date, func.min(Measurement.tobs), func.avg(
-        Measurement.tobs), func.max(Measurement.tobs)]
-    queryresults = session.query(*sel).\
-                    filter(func.strftime("%Y-%m-%d", Measurement.date) >= func.strftime("%Y-%m-%d", start)).\
-                    filter(func.strftime("%Y-%m-%d", Measurement.date) <= func.strftime("%Y-%m-%d", end)).\
-                        group_by(Measurement.date).all()
+    Measurement.tobs), func.max(Measurement.tobs)]
+    results =  session.query(*sel).\
+                filter(func.strftime("%Y-%m-%d", Measurement.date) >= func.strftime("%Y-%m-%d", start)).\
+                filter(func.strftime("%Y-%m-%d", Measurement.date) <= func.strftime("%Y-%m-%d", end)).\
+                    group_by(Measurement.date).all()
 
     # --- close the session ---
     session.close()
 
-    # Create a dictionary from the row data and append to a list of normals
-    Temperatures = []
+    a = datetime.datetime.strptime(first_date, "%Y-%m-%d")
+    b = datetime.datetime.strptime(last_date, "%Y-%m-%d")
+    b = b + datetime.timedelta(days=1)
+    date_array = \
+    (a + datetime.timedelta(days=x) for x in range(0, (b-a).days))
+    dates = []
+    for date_object in date_array:
+        dates.append(date_object.strftime("%Y-%m-%d"))
 
-    for temp_date, tmin, tavg, tmax in queryresults:
+    if (start and end) in dates:
+        Temperatures = []
 
-        # Create a dictionary from the row data and append to a list of temps_dict
-        temps_dict = {}
-        temps_dict["Date"] = temp_date
-        temps_dict["T-Min"] = tmin
-        temps_dict["T-Avg"] = tavg
-        temps_dict["T-Max"] = tmax
+        for temp_date, tmin, tavg, tmax in results:
+            #   Create a dictionary from the row data and append to a list of temps_dict
+            temps_dict = {}
+            temps_dict["Date"] = temp_date
+            temps_dict["T-Min"] = tmin
+            temps_dict["T-Avg"] = tavg
+            temps_dict["T-Max"] = tmax
 
-        # --- append each result's dictionary to the Temperatures list ---
-        Temperatures.append(temps_dict)
-
+            # --- append each result's dictionary to the Temperatures list ---
+            Temperatures.append(temps_dict)
         # --- return the JSON list of normals ---
-    return jsonify(Temperatures)
+        return jsonify(Temperatures)
 
+    if start not in dates or end in dates:
+        return jsonify({"error": f"Not a valid {start} Start Date. Date Range is {first_date} to {last_date}"}), 404
+
+    if start not in dates and end not in dates:
+        return jsonify({"error": f"Not a valid {start} Start Date and not a valid {end} End Date. Date Range is {first_date} to {last_date}"}), 404
+        
+    if start in dates and end not in dates:
+        return jsonify({"error": f"Not a valid {end} End Date. Date Range is {first_date} to {last_date}"}), 404
+    
+    
+
+    
 ######################################################################################################################################    
     
 if __name__ == "__main__":

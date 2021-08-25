@@ -270,7 +270,7 @@ def get_t_start_stop(start, end):
         # --- return the JSON list of normals ---
         return jsonify(Temperatures)
 
-    if start not in dates or end in dates:
+    if start not in dates and end in dates:
         return jsonify({"error": f"Not a valid {start} Start Date. Date Range is {first_date} to {last_date}"}), 404
 
     if start not in dates and end not in dates:
